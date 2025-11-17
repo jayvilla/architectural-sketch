@@ -1,3 +1,21 @@
+// sketch.service.ts
+// -----------------------------------------------------------------------------
+// High-level purpose:
+// This service handles the full image-processing pipeline for converting a
+// user-uploaded building photo into a clean, architectural-style sketch.
+//
+// Pipeline Overview:
+//   • Accept upload
+//   • Upload to Fal.ai storage
+//   • Run obstruction removal (inpainting)
+//   • Generate architectural sketch
+//
+// Notes:
+// - Fal.ai requires browser-compatible File objects for uploads
+// - Output URLs are returned for immediate frontend rendering or download
+// - Model selection can be swapped without modifying orchestration logic
+// -----------------------------------------------------------------------------
+
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { fal } from '@fal-ai/client';
 
@@ -6,14 +24,29 @@ export class SketchService {
   private readonly logger = new Logger(SketchService.name);
 
   constructor() {
-    // Configure Fal.ai API Key
+    // -------------------------------------------------------------------------
+    // Initialize Fal.ai API credentials.
+    // Ensures that the client is configured when the service is instantiated.
+    // Missing credentials fail fast during app startup.
+    // -------------------------------------------------------------------------
     fal.config({
       credentials: process.env.FAL_KEY!,
     });
   }
 
   /**
-   * PHASE 2 — Accept upload + run both phases (inpaint → sketch)
+   * handleUploadedImage
+   * ---------------------------------------------------------------------------
+   * Top-level orchestrator for the entire image-processing workflow.
+   *
+   * Responsibilities:
+   *   - Validate the uploaded file
+   *   - Inpaint/clean the source image
+   *   - Generate a sketch version from cleaned output
+   *   - Return canonical URLs suitable for frontend consumption
+   *
+   * This keeps high-level flow declarative while delegating the actual
+   * processing steps to smaller, testable helper methods.
    */
   async handleUploadedImage(file: Express.Multer.File) {
     if (!file) {
@@ -24,10 +57,7 @@ export class SketchService {
       `Received file: ${file.originalname} (${file.mimetype}, ${file.size} bytes)`,
     );
 
-    // Phase 3: Clean the image
     const cleanedUrl = await this.inpaintImage(file);
-
-    // Phase 4: Generate sketch from cleaned image
     const sketchUrl = await this.generateSketch(cleanedUrl);
 
     return {
@@ -38,20 +68,31 @@ export class SketchService {
   }
 
   /**
-   * PHASE 3 — Inpainting using Fal.ai (Kontext)
+   * inpaintImage
+   * ---------------------------------------------------------------------------
+   * Removes obstructions from the uploaded image using a Fal.ai model.
+   *
+   * Responsibilities:
+   *   - Convert Multer's file buffer → Web File (Fal requires browser-native File)
+   *   - Upload source image to Fal's storage (returns a public CDN URL)
+   *   - Call inpainting endpoint with a quality prompt
+   *   - Normalize Fal's output structure to extract a usable final image URL
+   *
+   * Includes robust error-handling and logging for easier debugging of model,
+   * upload, or response-shape issues.
    */
   async inpaintImage(file: Express.Multer.File): Promise<string> {
     try {
-      // Convert Node buffer → Uint8Array → Web File
+      // Convert raw buffer from Multer → Web File (required by Fal storage API)
       const uint8 = new Uint8Array(file.buffer);
       const webFile = new File([uint8], file.originalname, {
         type: file.mimetype,
       });
 
-      // Upload file → returns public URL
+      // Upload original image; Fal returns a globally accessible URL
       const imageUrl: string = await fal.storage.upload(webFile);
 
-      // Run Kontext inpainting model (requires image_url + prompt)
+      // Trigger inpainting model execution
       const result = await fal.run<any>('fal-ai/flux-pro/kontext', {
         input: {
           image_url: imageUrl,
@@ -60,11 +101,12 @@ export class SketchService {
         },
       });
 
+      // Fal sometimes returns either images[] or a single image object
       const outputUrl =
         result?.data?.images?.[0]?.url || result?.data?.image?.url;
 
       if (!outputUrl) {
-        throw new Error('No cleaned image returned from Fal.ai');
+        throw new Error('Fal.ai returned no inpainted image result.');
       }
 
       return outputUrl;
@@ -75,7 +117,15 @@ export class SketchService {
   }
 
   /**
-   * PHASE 4 — Sketch Generation using ControlNet Sketch
+   * generateSketch
+   * ---------------------------------------------------------------------------
+   * Produces a clean architectural pencil-style sketch from a processed image.
+   *
+   * Responsibilities:
+   *   - Call sketch model with descriptive prompt
+   *   - Normalize output to a single usable URL
+   *
+   * The prompt is tuned for line-art architectural accuracy with minimal shading.
    */
   async generateSketch(cleanedImageUrl: string): Promise<string> {
     try {
@@ -91,7 +141,7 @@ export class SketchService {
         result?.data?.images?.[0]?.url || result?.data?.image?.url;
 
       if (!sketchUrl) {
-        throw new Error('No sketch returned from Fal.ai');
+        throw new Error('Fal.ai returned no sketch output.');
       }
 
       return sketchUrl;

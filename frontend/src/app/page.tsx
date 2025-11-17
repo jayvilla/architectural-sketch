@@ -1,13 +1,49 @@
+// /app/page.tsx
+// -----------------------------------------------------------------------------
+// High-level purpose:
+// This page provides the user-facing interface for the entire upload → clean →
+// sketch pipeline. Users can upload a building photo, preview it locally,
+// and submit it to the backend for processing.
+//
+// Design Goals:
+//   • Keep UI state minimal and predictable.
+//   • Keep network calls isolated to a single interaction function.
+//   • Provide clear visual feedback for loading and processing states.
+//   • Show intermediate artifacts (cleaned image, sketch) as they become available.
+//   • Offer transparency via expandable raw response JSON.
+// -----------------------------------------------------------------------------
+
 "use client";
 
 import { useState } from "react";
 
 export default function HomePage() {
+  // ---------------------------------------------------------------------------
+  // Local component state:
+  //   file      – raw File object selected by user
+  //   preview   – browser-generated object URL for immediate visual feedback
+  //   response  – cleaned + sketch URLs returned by backend
+  //   loading   – toggles UI between idle and processing state
+  // ---------------------------------------------------------------------------
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [response, setResponse] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
+  /**
+   * handleFileChange
+   * ---------------------------------------------------------------------------
+   * Triggered when a user selects a file via the native file input.
+   *
+   * Responsibilities:
+   *   - Extract the File object
+   *   - Update state
+   *   - Generate a temporary preview URL for immediate rendering
+   *
+   * Notes:
+   *   - URL.createObjectURL is used for zero-latency previewing.
+   *   - Clean-up is unnecessary here because this URL is replaced rather than pooled.
+   */
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null;
     setFile(f);
@@ -16,6 +52,24 @@ export default function HomePage() {
     }
   };
 
+  /**
+   * handleUpload
+   * ---------------------------------------------------------------------------
+   * Sends the selected image to the backend for:
+   *   - obstruction removal
+   *   - architectural sketch generation
+   *
+   * Responsibilities:
+   *   - Guard against missing files
+   *   - Package file in FormData for multipart upload
+   *   - Execute POST request to backend
+   *   - Surface final JSON response to UI
+   *   - Toggle loading state for user feedback
+   *
+   * Notes:
+   *   - Uses NEXT_PUBLIC_API_URL to support multi-environment deployments.
+   *   - Minimal error handling; real apps might show toast notifications.
+   */
   const handleUpload = async () => {
     if (!file) return;
     setLoading(true);
@@ -41,6 +95,10 @@ export default function HomePage() {
     setLoading(false);
   };
 
+  // ---------------------------------------------------------------------------
+  // Render — The UI is intentionally simple: upload → preview → process → show results.
+  // Tailwind classes + CSS animations provide a clean, modern look without heavy styling.
+  // ---------------------------------------------------------------------------
   return (
     <main className="min-h-screen bg-gray-50 flex justify-center items-start py-16 px-6">
       <div className="w-full max-w-xl">
@@ -55,7 +113,7 @@ export default function HomePage() {
           </p>
         </header>
 
-        {/* CARD */}
+        {/* UPLOAD CARD */}
         <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 animate-scaleIn">
           {/* FILE INPUT */}
           <label className="block mb-6">
@@ -68,7 +126,7 @@ export default function HomePage() {
             />
           </label>
 
-          {/* PREVIEW */}
+          {/* LOCAL PREVIEW */}
           {preview && (
             <div className="mb-6 animate-fadeIn">
               <p className="font-medium text-gray-700 mb-1">Original Image:</p>
@@ -80,7 +138,7 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* BUTTON */}
+          {/* PROCESS BUTTON */}
           <button
             onClick={handleUpload}
             disabled={!file || loading}
@@ -89,6 +147,7 @@ export default function HomePage() {
             {loading ? "Processing..." : "Generate Sketch"}
           </button>
 
+          {/* LOADING MESSAGE */}
           {loading && (
             <p className="text-center text-gray-500 mt-3 animate-pulseGlow">
               Cleaning image & generating sketch...
@@ -96,7 +155,7 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* CLEANED IMAGE */}
+        {/* CLEANED IMAGE RESULT */}
         {response?.cleanedUrl && (
           <div className="mt-10 animate-fadeIn">
             <p className="font-semibold text-gray-800 mb-2">Cleaned Image:</p>
@@ -108,7 +167,7 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* SKETCH IMAGE */}
+        {/* FINAL SKETCH RESULT */}
         {response?.sketchUrl && (
           <div className="mt-10 animate-slideUp">
             <p className="font-semibold text-gray-800 mb-2">Final Sketch:</p>
@@ -120,7 +179,7 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* RAW JSON */}
+        {/* RAW JSON DEBUG VIEW */}
         {response && (
           <details className="mt-10 animate-fadeIn">
             <summary className="cursor-pointer text-gray-700 font-medium">
