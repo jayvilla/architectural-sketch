@@ -87,14 +87,14 @@ export default function HomePage() {
         </div>
 
         {/* RESPONSE */}
-        {response && (
-          <div className="mt-8 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              Server Response
-            </h2>
-            <pre className="text-sm text-gray-700 whitespace-pre-wrap">
-              {JSON.stringify(response, null, 2)}
-            </pre>
+        {response?.cleanedUrl && (
+          <div className="mt-6">
+            <p className="font-medium text-gray-800 mb-2">Cleaned Image:</p>
+            <img
+              src={response.cleanedUrl}
+              alt="cleaned"
+              className="rounded-xl border shadow-sm"
+            />
           </div>
         )}
       </div>
