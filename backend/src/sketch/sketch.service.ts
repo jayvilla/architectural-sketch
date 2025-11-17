@@ -6,14 +6,14 @@ export class SketchService {
   private readonly logger = new Logger(SketchService.name);
 
   constructor() {
-    // Set Fal.ai API key
+    // Configure Fal.ai API Key
     fal.config({
       credentials: process.env.FAL_KEY!,
     });
   }
 
   /**
-   * Phase 2 — accept upload
+   * PHASE 2 — Accept upload + run both phases (inpaint → sketch)
    */
   async handleUploadedImage(file: Express.Multer.File) {
     if (!file) {
@@ -24,30 +24,34 @@ export class SketchService {
       `Received file: ${file.originalname} (${file.mimetype}, ${file.size} bytes)`,
     );
 
-    // → Phase 3: call inpainting
+    // Phase 3: Clean the image
     const cleanedUrl = await this.inpaintImage(file);
 
+    // Phase 4: Generate sketch from cleaned image
+    const sketchUrl = await this.generateSketch(cleanedUrl);
+
     return {
-      message: 'Image cleaned successfully',
+      message: 'Sketch generated successfully',
       cleanedUrl,
+      sketchUrl,
     };
   }
 
   /**
-   * Phase 3 — Inpainting step using Fal.ai
+   * PHASE 3 — Inpainting using Fal.ai (Kontext)
    */
   async inpaintImage(file: Express.Multer.File): Promise<string> {
     try {
-      // Fix: convert Node buffer → Uint8Array → Web File
+      // Convert Node buffer → Uint8Array → Web File
       const uint8 = new Uint8Array(file.buffer);
       const webFile = new File([uint8], file.originalname, {
         type: file.mimetype,
       });
 
-      // Upload → returns a string URL
+      // Upload file → returns public URL
       const imageUrl: string = await fal.storage.upload(webFile);
 
-      // Call the model (Kontext requires image_url)
+      // Run Kontext inpainting model (requires image_url + prompt)
       const result = await fal.run<any>('fal-ai/flux-pro/kontext', {
         input: {
           image_url: imageUrl,
@@ -56,18 +60,44 @@ export class SketchService {
         },
       });
 
-      // Output handling
       const outputUrl =
         result?.data?.images?.[0]?.url || result?.data?.image?.url;
 
       if (!outputUrl) {
-        throw new Error('No cleaned image returned');
+        throw new Error('No cleaned image returned from Fal.ai');
       }
 
       return outputUrl;
     } catch (err) {
       this.logger.error('Inpainting failed', err);
       throw new BadRequestException('Fal.ai inpainting failed');
+    }
+  }
+
+  /**
+   * PHASE 4 — Sketch Generation using ControlNet Sketch
+   */
+  async generateSketch(cleanedImageUrl: string): Promise<string> {
+    try {
+      const result = await fal.run<any>('fal-ai/flux-pro/kontext', {
+        input: {
+          image_url: cleanedImageUrl,
+          prompt:
+            'architectural pencil sketch, clean line drawing, building facade, no shading, sharp outlines',
+        },
+      });
+
+      const sketchUrl =
+        result?.data?.images?.[0]?.url || result?.data?.image?.url;
+
+      if (!sketchUrl) {
+        throw new Error('No sketch returned from Fal.ai');
+      }
+
+      return sketchUrl;
+    } catch (err) {
+      this.logger.error('Sketch generation failed', err);
+      throw new BadRequestException('Fal.ai sketch generation failed');
     }
   }
 }
