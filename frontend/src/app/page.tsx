@@ -45,33 +45,37 @@ export default function HomePage() {
     <main className="min-h-screen bg-gray-50 flex justify-center items-start py-16 px-6">
       <div className="w-full max-w-xl">
         {/* HEADER */}
-        <header className="mb-10 text-center">
-          <h1 className="text-4xl font-bold text-gray-900">
+        <header className="mb-10 text-center animate-fadeIn">
+          <h1 className="text-4xl font-bold text-gray-900 tracking-tight">
             Architectural Sketch Generator
           </h1>
           <p className="text-gray-600 mt-2">
-            Upload a building photo. We’ll clean it and turn it into a
-            pencil-style architectural sketch.
+            Upload a building photo. We’ll clean obstructions and convert it
+            into a pencil-style architectural sketch.
           </p>
         </header>
 
         {/* CARD */}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 animate-scaleIn">
           {/* FILE INPUT */}
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="cursor-pointer mb-6 block text-gray-700"
-          />
+          <label className="block mb-6">
+            <span className="text-gray-700 font-medium">Upload Image</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="mt-2 block w-full text-gray-700 cursor-pointer rounded-lg border border-gray-300 p-2"
+            />
+          </label>
 
           {/* PREVIEW */}
           {preview && (
-            <div className="mb-6">
+            <div className="mb-6 animate-fadeIn">
+              <p className="font-medium text-gray-700 mb-1">Original Image:</p>
               <img
                 src={preview}
                 alt="preview"
-                className="rounded-xl border shadow-sm w-full"
+                className="rounded-xl border shadow-sm w-full animate-blurReveal"
               />
             </div>
           )}
@@ -80,22 +84,52 @@ export default function HomePage() {
           <button
             onClick={handleUpload}
             disabled={!file || loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-xl text-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+            className="w-full bg-blue-600 text-white py-3 rounded-xl text-lg font-medium hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-all"
           >
-            {loading ? "Uploading..." : "Upload Image"}
+            {loading ? "Processing..." : "Generate Sketch"}
           </button>
+
+          {loading && (
+            <p className="text-center text-gray-500 mt-3 animate-pulseGlow">
+              Cleaning image & generating sketch...
+            </p>
+          )}
         </div>
 
-        {/* RESPONSE */}
+        {/* CLEANED IMAGE */}
         {response?.cleanedUrl && (
-          <div className="mt-6">
-            <p className="font-medium text-gray-800 mb-2">Cleaned Image:</p>
+          <div className="mt-10 animate-fadeIn">
+            <p className="font-semibold text-gray-800 mb-2">Cleaned Image:</p>
             <img
               src={response.cleanedUrl}
               alt="cleaned"
-              className="rounded-xl border shadow-sm"
+              className="rounded-xl border shadow-sm w-full animate-blurReveal"
             />
           </div>
+        )}
+
+        {/* SKETCH IMAGE */}
+        {response?.sketchUrl && (
+          <div className="mt-10 animate-slideUp">
+            <p className="font-semibold text-gray-800 mb-2">Final Sketch:</p>
+            <img
+              src={response.sketchUrl}
+              alt="sketch"
+              className="rounded-xl border shadow-sm w-full bg-white animate-blurReveal"
+            />
+          </div>
+        )}
+
+        {/* RAW JSON */}
+        {response && (
+          <details className="mt-10 animate-fadeIn">
+            <summary className="cursor-pointer text-gray-700 font-medium">
+              Show Response JSON
+            </summary>
+            <pre className="text-sm bg-gray-100 p-4 rounded-xl mt-3 overflow-auto">
+              {JSON.stringify(response, null, 2)}
+            </pre>
+          </details>
         )}
       </div>
     </main>
